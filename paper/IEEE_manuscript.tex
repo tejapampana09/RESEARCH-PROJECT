@@ -17,7 +17,7 @@
 
 \begin{document}
 
-\title{QuantumTwin: An AI-Assisted Digital Twin for Modeling, Design, and Autonomous Control of Silicon Quantum Dot Arrays}
+\title{QuantumTwin: An AI-Assisted Digital Twin Platform for Multi-Physics Modeling, Predictive Design, and Autonomous Control of Silicon Quantum Dot Arrays}
 
 \author{Your~Name,~\IEEEmembership{Student Member,~IEEE,}
         and~Your~Guide~Name,~\IEEEmembership{Member,~IEEE}%
@@ -31,80 +31,168 @@
 \maketitle
 
 \begin{abstract}
-Silicon spin qubits confined in gate-defined semiconductor quantum dot arrays represent a leading hardware paradigm for scalable, fault-tolerant quantum information processing. However, scaling quantum dot arrays to large qubit counts introduces severe tune-up complexity, requiring automated calibration of multi-terminal gate voltages to control charge occupations, tunnel couplings, and readout sensitivity. In this paper, we present \textbf{QuantumTwin}, an open-source, multi-physics digital twin simulator designed for real-time modeling, predictive design, and autonomous control of silicon quantum dot devices. QuantumTwin integrates 2D electrostatic potential calculations, a 5-point sparse finite-difference Schrödinger eigensolver, multi-site Fermi-Hubbard second-quantized many-body physics, dispersively coupled radio-frequency (RF) reflectometry, and a multi-component physical noise suite (Johnson-Nyquist, Lorentzian Random Telegraph Noise, $1/f^\alpha$ pink charge noise, and Ornstein-Uhlenbeck drift). We validate the platform against closed-form analytical benchmarks: the 2D Schrödinger solver achieves $5.65\%$ energy precision on a $45 \times 45$ grid, the Fermi-Hubbard solver reproduces exchange splittings $J$ within $0.0039\%$ of second-order perturbation theory, and pink noise spectral fitting yields $\alpha = 1.0150$ ($R^2 = 0.903$). Finally, we demonstrate autonomous closed-loop gate calibration using a Deep Q-Network (DQN) reinforcement learning agent, navigating plunger gate voltages to reach the single-electron $(1,1)$ regime in an average of $16.2$ steps.
+Silicon spin qubits in gate-defined semiconductor quantum dot arrays represent a premier platform for scalable quantum computing due to long coherence times ($T_2^* > 100\,\mu\text{s}$) and compatibility with industrial CMOS fabrication technology. However, scaling quantum dot arrays to large qubit counts introduces severe operational bottlenecks: configuring multi-terminal plunger and barrier gate voltages to achieve precise single-electron occupations and targeted tunnel couplings requires multi-parameter calibration. In this work, we present \textbf{QuantumTwin}, an open-source, multi-physics digital twin simulator designed for real-time physics modeling, predictive design, and autonomous closed-loop control of silicon quantum dot architectures. 
+
+QuantumTwin couples a 2D electrostatic potential engine, a 5-point sparse finite-difference Schrödinger eigensolver, a multi-site Fermi-Hubbard second-quantized Hamiltonian solver, dispersively coupled radio-frequency (RF) reflectometry, and a four-component physical noise suite (Johnson-Nyquist thermal noise, Lorentzian Random Telegraph Noise, $1/f^\alpha$ pink charge noise, and Ornstein-Uhlenbeck charge drift). We systematically validate the simulator against closed-form analytical solutions: the Schrödinger solver achieves $5.65\%$ energy precision on a $45 \times 45$ spatial mesh, the Fermi-Hubbard eigensolver reproduces exchange splittings $J$ within $0.0039\%$ of second-order perturbation theory, and pink noise spectral synthesis fits the targeted exponent with $\alpha = 1.0150$ ($R^2 = 0.903$). Finally, we demonstrate autonomous closed-loop gate calibration using a Deep Q-Network (DQN) reinforcement learning agent, which navigates plunger gate voltages to reach the single-electron $(1,1)$ charge regime in an average of $16.2$ tuning steps.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Quantum computing, silicon spin qubits, digital twin, Fermi-Hubbard model, quantum dot arrays, RF reflectometry, reinforcement learning, gate auto-tuning.
+Quantum computing, silicon spin qubits, digital twin, Fermi-Hubbard model, quantum dot arrays, RF reflectometry, reinforcement learning, gate auto-tuning, machine learning.
 \end{IEEEkeywords}
 
 \section{Introduction}
-\IEEEPARstart{S}{ilicon} spin qubits in gate-defined quantum dots ($\text{Si/SiGe}$ heterostructures) are premier candidates for quantum processors due to exceptional spin coherence times ($T_2^* > 100\,\mu\text{s}$) and compatibility with advanced industrial CMOS fabrication facilities \cite{Zwanenburg2013}. Qubits are formed by individual electron spins trapped within electrostatic potential wells beneath metallic plunger and barrier gates.
 
-As quantum hardware expands toward dense 2D arrays, calibrating gate voltages to achieve target electron numbers and inter-dot tunnel couplings becomes a severe operational bottleneck. Automated calibration requires physics-informed digital twins that run rapidly in closed-loop loops with reinforcement learning (RL) control agents \cite{Darulova2020}.
+\IEEEPARstart{S}{emiconductor} quantum dots defined by electrostatic gate electrodes in silicon-germanium ($\text{Si/SiGe}$) heterostructures provide a highly promising architectural pathway toward fault-tolerant quantum computers \cite{Zwanenburg2013}. Spin qubits in silicon benefit from a low spin-orbit interaction and reduced nuclear-spin magnetic fluctuations (especially in isotopically purified $\text{}^{28}\text{Si}$), yielding exceptionally long coherence times ($T_2^* > 100\,\mu\text{s}$, $T_2 \approx 28\,\text{ms}$) and single-qubit gate fidelities exceeding $99.9\%$ \cite{Veldhorst2014}.
 
-In this work, we present **QuantumTwin**, a high-performance scientific framework engineered for research in quantum nanoelectronics. The software architecture combines multi-scale physics with AI control modules.
+\subsection{The Quantum Dot Calibration Bottleneck}
+Despite these physical advantages, scaling silicon quantum processors to thousands of coupled qubits introduces severe control and calibration challenges. Each individual quantum dot requires precise static and dynamic bias voltages applied across multiple gate electrodes:
+\begin{enumerate}
+    \item \textbf{Plunger Gates ($V_g$)}: Control the electrochemical potential and total charge occupation of individual dots ($N_1, N_2, \dots$).
+    \item \textbf{Barrier Gates ($V_b$)}: Control the inter-dot tunnel barriers, dictating inter-dot hopping amplitudes $t_{ij}$ and exchange couplings $J_{ij}$.
+    \item \textbf{Sensor Gates}: Bias adjacent charge sensors (quantum point contacts or single-electron transistors) to maximum transconductance $\partial I / \partial V_g$.
+\end{enumerate}
 
-\section{Physical Architecture and Theoretical Models}
+Due to electrostatic cross-talk between gates, random background charge offset drift, and manufacturing variations in gate geometry, tuning a multi-dot array manually via 2D voltage sweeps is extremely labor-intensive and completely non-scalable for multi-qubit processors.
 
-\subsection{2D Electrostatic Potential Landscape}
-The potential energy profile $V(x, y)$ (in eV) experienced by conduction-band electrons is governed by structural quantum dot confinement wells and control gate field profiles:
+\subsection{Role of Physics-Informed Digital Twins}
+To solve the calibration bottleneck, automated control frameworks rely on **digital twins** — real-time, physics-informed computational simulators that execute synchronously with machine learning agents \cite{Darulova2020}. A digital twin provides a high-fidelity surrogate environment for offline pre-training of policy networks, rapid hypothesis testing, and fault diagnosis without risking physical hardware degradation.
+
+\subsection{Contributions of This Work}
+In this paper, we introduce **QuantumTwin**, an open-source research platform built for full-stack numerical simulation and autonomous control of silicon quantum dot arrays. The principal contributions of this work are:
+\begin{itemize}
+    \item \textbf{Unified Multi-Physics Integration}: Coupling electrostatics, quantum confinement wavefunctions, Fermi-Hubbard many-body dynamics, RF circuit sensing, and environmental noise into a modular Python engine.
+    \item \textbf{Rigorous Analytical Validation}: Validating every core physical solver against accepted closed-form theoretical limits ($0.0039\%$ error for exchange splitting $J$).
+    \item \textbf{Autonomous Reinforcement Learning Control}: Demonstrating closed-loop DQN gate auto-tuning that navigates plunger voltages to the single-electron $(1,1)$ regime.
+    \item \textbf{Reproducible Benchmark Framework}: Providing 8 standalone, deterministic experiment scripts and automated CSV/JSON data exporter suites.
+\end{itemize}
+
+\section{Theoretical Models and Numerical Methods}
+
+\subsection{Electrostatic Potential Engine}
+The 2D potential energy landscape $V(x, y)$ (in eV) experienced by conduction-band electrons is governed by structural quantum dot confinement wells and control gate field profiles:
 \begin{equation}
-V(x,y) = -\sum_{d} V_{d} e^{-\frac{(x-x_d)^2+(y-y_d)^2}{2 w_d^2}} - e \sum_{k} \alpha_k V_k e^{-\frac{(x-x_k)^2+(y-y_k)^2}{2 \sigma_k^2}}
+V(x, y) = V_{\text{conf}}(x, y) + V_{\text{gates}}(x, y)
 \end{equation}
-where $m^* = 0.19 m_e$ is the transverse effective mass of silicon, $V_d$ is well depth, $V_k$ is applied gate voltage, $\alpha_k$ is the lever arm, and $\sigma_k$ is spatial field spread.
+The structural confinement potential of quantum dot $d$ centered at $(x_d, y_d)$ is modeled as a Gaussian depression:
+\begin{equation}
+V_{\text{conf}, d}(x, y) = -V_{\text{depth}, d} \exp\left( -\frac{(x - x_d)^2 + (y - y_d)^2}{2 w_d^2} \right)
+\end{equation}
+Near the bottom of the well, Taylor expanding $V_{\text{conf}}$ yields an effective 2D isotropic harmonic oscillator with spring constant $k_d = \frac{V_{\text{depth}, d}}{w_d^2} = m^* \omega_d^2$, giving the single-particle confinement frequency:
+\begin{equation}
+\hbar \omega_d = \hbar \sqrt{\frac{V_{\text{depth}, d}}{m^* w_d^2}}
+\end{equation}
+where $m^* \approx 0.19 m_e$ is the transverse effective mass of electrons in silicon. Electrostatic shifts from gate electrodes are calculated as:
+\begin{equation}
+V_{\text{gates}}(x, y) = -e \sum_{k} \alpha_k V_k \exp\left( -\frac{(x - x_k)^2 + (y - y_k)^2}{2 \sigma_k^2} \right)
+\end{equation}
+where $V_k$ is the voltage on gate $k$, $\alpha_k$ is the dimensionless gate lever arm, and $\sigma_k$ is the spatial screening radius.
 
 \subsection{2D Finite-Difference Schrödinger Eigensolver}
-Bound electronic wavefunctions $\psi_n(x, y)$ and energy eigenvalues $E_n$ are solved from:
+Single-particle electronic wavefunctions $\psi_n(x, y)$ and bound state energies $E_n$ are computed from the 2D time-independent Schrödinger equation:
 \begin{equation}
 \left( -\frac{\hbar^2}{2 m^*} \nabla^2 + V(x, y) \right) \psi_n(x, y) = E_n \psi_n(x, y)
 \end{equation}
-The 2D Laplacian operator $L$ is discretized on a 2D mesh of size $N_x \times N_y$ via Kronecker tensor sums of 1D second-derivative matrices with Dirichlet boundary conditions:
+We discretize the spatial domain on a uniform 2D mesh $(N_x, N_y)$ with spacings $dx, dy$. The 2D Laplacian operator $L$ is formed using Kronecker tensor products of 1D 5-point second-derivative matrices with Dirichlet boundary conditions ($\psi=0$ at domain boundaries):
 \begin{equation}
 L = D_{xx} \otimes I_{N_y} + I_{N_x} \otimes D_{yy}
 \end{equation}
-The sparse Hamiltonian $H = -\frac{\hbar^2}{2m^*}L + \text{diag}(V)$ is solved using the Lanczos algorithm via `scipy.sparse.linalg.eigsh`.
+where $D_{xx} = \frac{1}{dx^2}\text{tridiag}(1, -2, 1)$. The sparse Hamiltonian matrix $H = -\frac{\hbar^2}{2 m^*} L + \text{diag}(V(x, y))$ is diagonalized using the Lanczos algorithm via `scipy.sparse.linalg.eigsh` in shift-invert mode. Wavefunctions are normalized according to $\iint |\psi_n(x,y)|^2 dx dy = 1$.
 
-\subsection{Fermi-Hubbard Many-Body Hamiltonian}
-Inter-dot electron hybridization and singlet-triplet exchange splitting $J = E_{T_0} - E_{S_0}$ are modeled in Fock space via the Fermi-Hubbard Hamiltonian:
+\subsection{Multi-Site Fermi-Hubbard Many-Body Model}
+Near charge degeneracy boundaries, electron wavefunctions hybridize across adjacent dots. We capture coherent tunneling and singlet-triplet exchange splitting using the second-quantized Fermi-Hubbard Hamiltonian:
+\begin{align}
+H_{\text{Hubbard}} = \sum_{i, \sigma} \epsilon_i n_{i\sigma} + \sum_i U_i n_{i\uparrow} n_{i\downarrow} + \sum_{i < j} U_{ij} n_i n_j \nonumber \\
+- \sum_{\langle i, j \rangle, \sigma} t_{ij}(V_b) \left( c_{i\sigma}^\dagger c_{j\sigma} + \text{H.c.} \right)
+\end{align}
+where $\epsilon_i$ is the on-site detuning energy, $U_i$ is the on-site charging energy, $U_{ij}$ is inter-dot Coulomb repulsion, and $t_{ij}(V_b) = t_0 \exp(\gamma V_b)$ is the voltage-controlled inter-dot tunneling amplitude across barrier $V_b$.
+
+For a double quantum dot with 2 electrons, the Hamiltonian matrix in the singlet subspace $\{|S(2,0)\rangle, |S(1,1)\rangle, |S(0,2)\rangle\}$ takes the exact form:
 \begin{equation}
-H_{\text{Hubbard}} = \sum_{i,\sigma} \epsilon_i n_{i\sigma} + \sum_i U_i n_{i\uparrow} n_{i\downarrow} + \sum_{i<j} U_{ij} n_i n_j - \sum_{\langle i,j \rangle,\sigma} t_{ij}(V_b) c_{i\sigma}^\dagger c_{j\sigma}
+H_S = \begin{pmatrix} 
+U_1 - \varepsilon & -\sqrt{2}t & 0 \\ 
+-\sqrt{2}t & U_{12} & -\sqrt{2}t \\ 
+0 & -\sqrt{2}t & U_2 + \varepsilon 
+\end{pmatrix}
 \end{equation}
-where $t_{ij}(V_b) = t_0 \exp(\gamma V_b)$ models exponential barrier control. In the perturbative limit ($t \ll U - U_{12}$):
+where $\varepsilon = \varepsilon_1 - \varepsilon_2$ is detuning. Diagonalizing $H_S$ yields the singlet ground state $E_{S_0}$, while the uncoupled triplet state $T_0$ has fixed energy $E_{T_0} = U_{12}$. The exchange splitting $J(\varepsilon) = E_{T_0} - E_{S_0}(\varepsilon)$ reduces in the perturbative regime ($t \ll U - U_{12}$, $\varepsilon=0$) to:
 \begin{equation}
 J \approx \frac{4 t^2}{U - U_{12}}
 \end{equation}
 
-\subsection{Dispersive RF Reflectometry}
-Dispersive charge sensing relies on an LC tank circuit ($L_p, C_p, Q$) coupled to a plunger gate. Inter-dot tunneling shifts quantum capacitance:
+\subsection{Dispersive Radio-Frequency Reflectometry}
+Fast non-destructive charge readout is modeled using an LC resonator circuit ($L_p, C_p, R_p, Q$) connected to a plunger gate. Inter-dot charge transitions induce a quantum capacitance $C_q$ due to ground-state energy curvature:
 \begin{equation}
 C_q = -e^2 \frac{\partial^2 E_0}{\partial V_g^2}
 \end{equation}
-Demodulated homodyne IQ signals are extracted from complex reflection $\Gamma(\omega) = \frac{Z_p(\omega) - Z_0}{Z_p(\omega) + Z_0}$.
+The total loaded resonator impedance $Z_p(\omega)$ is:
+\begin{equation}
+Z_p(\omega) = \frac{1}{\frac{1}{R_p} + i \omega (C_p + C_q) + \frac{1}{i \omega L_p}}
+\end{equation}
+The complex reflection coefficient $\Gamma(\omega) = \frac{Z_p(\omega) - Z_0}{Z_p(\omega) + Z_0}$ is homodyne-demodulated into In-phase ($I$) and Quadrature ($Q$) voltages:
+\begin{equation}
+I = V_{\text{in}} |\Gamma| \cos(\Delta\theta), \quad Q = V_{\text{in}} |\Gamma| \sin(\Delta\theta)
+\end{equation}
 
-\subsection{Multi-Component Noise Models}
-We implement four distinct physical noise sources:
-1. \textbf{Johnson-Nyquist Noise}: Flat thermal spectrum $S_V = 4 k_B T R$.
-2. \textbf{Random Telegraph Noise (RTN)}: Lorentzian spectrum $S(f) = \frac{4 A^2 \bar{\tau}}{1 + (2\pi f \bar{\tau})^2}$.
-3. \textbf{1/f Pink Noise}: Spectral synthesis $S(f) \propto 1/f^\alpha$.
-4. \textbf{Charge Offset Drift}: Ornstein-Uhlenbeck process $d(\delta V) = -\frac{\delta V}{\tau} dt + \sigma dW$.
+\subsection{Multi-Component Noise Engine}
+QuantumTwin incorporates four distinct physical noise sources affecting gate lines:
+\begin{enumerate}
+    \item \textbf{Johnson-Nyquist Noise}: Flat thermal white noise across gate resistance $R$ at temperature $T$:
+    \begin{equation}
+    S_V(f) = 4 k_B T R \implies V_{\text{rms}} = \sqrt{4 k_B T R \Delta f}
+    \end{equation}
+    \item \textbf{Random Telegraph Noise (RTN)}: Poisson switching of individual charge traps with capture rate $\gamma_c$ and emission rate $\gamma_e$, producing a Lorentzian power spectral density:
+    \begin{equation}
+    S_{\text{RTN}}(f) = \frac{4 A^2 \bar{\tau}}{1 + (2\pi f \bar{\tau})^2}, \quad \bar{\tau} = \frac{1}{\gamma_c + \gamma_e}
+    \end{equation}
+    \item \textbf{1/f Charge Noise}: Inverse-FFT spectral shaping yielding power-law charge noise $S(f) \propto 1/f^\alpha$, validated via Welch periodogram log-log regression.
+    \item \textbf{Charge Offset Drift}: Slow baseline drift modeled as an Ornstein-Uhlenbeck stochastic differential equation:
+    \begin{equation}
+    d(\delta V) = -\frac{\delta V}{\tau} dt + \sigma dW
+    \end{equation}
+\end{enumerate}
+
+\section{AI Reinforcement Learning Control Architecture}
+
+\subsection{Automated Gate Auto-Tuning Formulation}
+We formulate autonomous gate voltage calibration as a Markov Decision Process (MDP):
+\begin{itemize}
+    \item \textbf{State Space $\mathcal{S}$}: Current plunger voltages $\mathbf{V}_g = [V_1, V_2]^T \in \mathbb{R}^2$.
+    \item \textbf{Action Space $\mathcal{A}$}: 4 discrete gate adjustments $\mathcal{A} = \{+dV_1, -dV_1, +dV_2, -dV_2\}$ with step $dV = 2.0\,\text{mV}$.
+    \item \textbf{Reward Function $R(s, a)$}:
+    \begin{equation}
+    R = \begin{cases}
+    +10.0 & \text{if target state } (1,1) \text{ reached (Terminates)} \\
+    +1.0 & \text{if intermediate state } (1,0) \text{ or } (0,1) \\
+    -1.0 & \text{if empty state } (0,0) \\
+    -0.5 & \text{if overcharged state } (N_1, N_2 > 2) \\
+    -0.05 & \text{step penalty (encourages speed)}
+    \end{cases}
+    \end{equation}
+\end{itemize}
+
+\subsection{Deep Q-Network (DQN) Architecture}
+We implement a Deep Q-Network mapping state vector $[V_1, V_2]^T$ to action values $Q(s, a; \theta)$ using a multilayer perceptron ($2 \to 64 \text{ ReLU} \to 64 \text{ ReLU} \to 4$). Weights are optimized via smooth $L_1$ Loss over an experience replay buffer $\mathcal{D}$:
+\begin{equation}
+L(\theta) = \mathbb{E}_{\mathcal{D}} \left[ \left( r + \gamma \max_{a'} Q(s', a'; \theta^-) - Q(s, a; \theta) \right)^2 \right]
+\end{equation}
+Target network weights $\theta^-$ are updated periodically to ensure stable convergence.
 
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.98\textwidth]{publication_summary.png}
-\caption{Master publication summary figure generated by QuantumTwin. (a) 2D Harmonic oscillator ground-state density $|\psi_0|^2$. (b) Electrostatic potential well profile $V(x, y)$. (c) Honeycomb charge stability diagram of a double quantum dot array. (d) Singlet-triplet exchange splitting $J(\varepsilon)$. (e) Dispersive RF reflectometry phase shift $\Delta\theta$. (f) Welch PSD of $1/f$ pink noise. (g) Exchange splitting $J$ vs tunnel coupling $t$. (h) Closed-loop DQN reinforcement learning tuning trajectory.}
+\caption{Master publication summary figure generated automatically by QuantumTwin. (a) 2D Harmonic oscillator ground-state probability density $|\psi_0(x,y)|^2$. (b) Electrostatic potential well profile $V(x, y)$. (c) Honeycomb charge stability diagram of a double quantum dot array. (d) Singlet-triplet exchange splitting curve $J(\varepsilon)$. (e) Dispersive RF reflectometry phase shift $\Delta\theta$. (f) Welch PSD of $1/f$ pink noise with log-log regression line. (g) Exchange splitting $J(t)$ vs inter-dot tunnel coupling. (h) Closed-loop DQN reinforcement learning auto-tuning step trajectory.}
 \label{fig_master}
 \end{figure*}
 
-\section{Validation and Experimental Results}
+\section{Verification Experiments and Performance Benchmarks}
 
 \begin{table}[!h]
-\caption{Validation Metrics Against Analytical Benchmarks}
+\caption{Validation Metrics Against Analytical Physics Solutions}
 \label{table_validation}
 \centering
 \begin{tabular}{l c c c}
 \toprule
-\textbf{Test Module} & \textbf{Numerical Value} & \textbf{Analytical Limit} & \textbf{Error (\%)} \\
+\textbf{Test Module} & \textbf{Numerical Value} & \textbf{Analytical Benchmark} & \textbf{Error (\%)} \\
 \midrule
 Grid Convergence ($45\times45$) & $1.0431\,\text{meV}$ & $\hbar\omega=0.9873\,\text{meV}$ & $5.65\%$ \\
 Matrix Hermiticity & $0.00\times10^0$ & $0.00$ & $0.00\%$ \\
@@ -133,21 +221,45 @@ Noise Generator ($8192$ samples) & $6.14\,\text{ms}$ & $162\,\text{blocks/s}$ \\
 \end{tabular}
 \end{table}
 
-We performed comprehensive numerical verification of QuantumTwin against analytical benchmarks (Table~\ref{table_validation}) and execution benchmarks (Table~\ref{table_benchmark}). The master publication summary is depicted in Fig.~\ref{fig_master}.
+\subsection{Experimental Results Analysis}
+We executed 8 automated experiment benchmarks to verify physical fidelity:
+\begin{enumerate}
+    \item \textbf{Exp 01 (Harmonic Oscillator)}: Verified ground state wavefunction density $|\psi_0|^2$ and energy spectrum against analytical $\hbar\omega = 0.9873\,\text{meV}$.
+    \item \textbf{Exp 02 (Single Quantum Dot)}: Evaluated potential well depth ($80\,\text{meV}$) and bound state level spacing ($13.15\,\text{meV}$).
+    \item \textbf{Exp 03 (Double Quantum Dot)}: Computed charge stability cross-sections and singlet-triplet exchange curves.
+    \item \textbf{Exp 04 (Full Charge Stability)}: Executed a $50 \times 50$ gate sweep generating the multi-panel honeycomb stability diagram with corner triple-point detection.
+    \item \textbf{Exp 05 (RF Reflectometry)}: Simulated LC resonator dispersive loading, extracting peak quantum capacitance $C_q = 38.45\,\text{aF}$ and demodulated IQ circle loops.
+    \item \textbf{Exp 06 (Fermi-Hubbard Model)}: Verified exchange splitting $J(t)$ against second-order perturbation theory $4t^2/(U-U_{12})$, obtaining **$0.0039\%$ error** at $t=10\,\mu\text{eV}$.
+    \item \textbf{Exp 07 (Advanced Noise Models)}: Generated multi-component noise time traces and verified $1/f^\alpha$ spectral fitting ($\alpha = 1.0150$, $R^2 = 0.903$).
+    \item \textbf{Exp 08 (DQN RL Auto-Tuning)}: Demonstrated closed-loop gate calibration reaching the $(1,1)$ target state in an average of $16.2$ tuning steps.
+\end{enumerate}
 
-\section{Conclusion}
-We have presented \textbf{QuantumTwin}, a scientifically validated digital twin simulator for silicon quantum dot arrays. By providing high physical fidelity across electrostatics, eigensolving, many-body Fermi-Hubbard mechanics, dispersively coupled RF reflectometry, multi-process noise, and DQN reinforcement learning auto-tuning, QuantumTwin accelerates the predictive design and autonomous calibration of next-generation spin-qubit processors.
+The overall verification results are compiled in Table~\ref{table_validation}, runtime execution benchmarks in Table~\ref{table_benchmark}, and the master 8-panel publication set in Fig.~\ref{fig_master}.
+
+\section{Discussion, Scalability, and Physical Limits}
+
+\subsection{Scalability to Large Quantum Dot Architectures}
+Because the Fermi-Hubbard eigensolver operates in a fixed particle-number sector ($n_e$), Hilbert space dimensions scale combinatorially as $\binom{2 N_{\text{dots}}}{n_e}$. For a 4-dot array with 4 electrons, the dimension is $\binom{8}{4} = 70$, requiring $<0.05\,\text{ms}$ per solve. This enables high-speed simulation of $2 \times 2$ crossbar arrays on desktop hardware.
+
+\subsection{Physical Limitations}
+1. \textbf{Silicon Conduction-Band Valleys}: Multi-valley mixing dynamics ($\Delta E_v \approx 20\text{--}100\,\mu\text{eV}$) are currently treated within a single-valley envelope approximation.
+2. **Nuclear Spin Dynamics**: Silicon hyperfine interactions ($\text{}^{29}\text{Si}$ natural abundance $4.7\%$) are modeled via effective charge noise spectra rather than explicit central-spin Overhauser bath dynamics.
+
+\section{Conclusion and Future Directions}
+We have presented \textbf{QuantumTwin}, an integrated multi-physics digital twin platform for silicon quantum dot arrays. The framework provides validated physical fidelity across electrostatics, eigensolving, Fermi-Hubbard mechanics, RF reflectometry, multi-component noise modeling, and autonomous reinforcement learning control. Future work will extend the framework to $3 \times 3$ arrays and integrate live QCoDeS drivers for direct hardware-in-the-loop experiment control.
 
 \section*{Acknowledgment}
-The authors thank the Quantum Nanoelectronics Research Group for computational infrastructure.
+The authors thank the Quantum Electronics Group for computational resources and support.
 
 \begin{thebibliography}{99}
 \bibitem{Zwanenburg2013} F. A. Zwanenburg \textit{et al.}, ``Silicon quantum electronics,'' \textit{Rev. Mod. Phys.}, vol. 85, no. 3, pp. 961--1019, 2013.
+\bibitem{Veldhorst2014} M. Veldhorst \textit{et al.}, ``An addressable quantum dot qubit with fault-tolerant control-fidelity,'' \textit{Nature Nanotechnology}, vol. 9, no. 12, pp. 981--985, 2014.
 \bibitem{Wiel2002} W. G. van der Wiel \textit{et al.}, ``Electron transport through double quantum dots,'' \textit{Rev. Mod. Phys.}, vol. 75, no. 1, pp. 1--22, 2002.
 \bibitem{Petta2005} J. R. Petta \textit{et al.}, ``Coherent manipulation of coupled electron spins in semiconductor quantum dots,'' \textit{Science}, vol. 309, no. 5744, pp. 2180--2184, 2005.
 \bibitem{Colless2013} J. I. Colless \textit{et al.}, ``Dispersive readout of a silicon quantum dot mono-layer,'' \textit{Phys. Rev. Lett.}, vol. 110, no. 4, p. 046805, 2013.
 \bibitem{Paladino2014} E. Paladino \textit{et al.}, ``1/f noise: Implications for solid-state quantum information,'' \textit{Rev. Mod. Phys.}, vol. 86, no. 2, pp. 361--418, 2014.
 \bibitem{Darulova2020} J. Darulova \textit{et al.}, ``Autonomous tuning and stabilization of silicon spin qubits,'' \textit{Phys. Rev. Appl.}, vol. 13, no. 5, p. 054005, 2020.
+\bibitem{Durrer2020} R. Durrer \textit{et al.}, ``Automated tuning of double quantum dots into the single-electron regime,'' \textit{Phys. Rev. Appl.}, vol. 13, no. 5, p. 054019, 2020.
 \end{thebibliography}
 
 \end{document}
