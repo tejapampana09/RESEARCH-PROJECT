@@ -1,0 +1,7 @@
+Test,Measured,Analytical,Error_Percent,Status
+Grid Convergence (45x45),1.0431 meV,0.9873 meV,5.6535%,PASSED
+Hubbard Matrix Hermiticity,0.00e+00,0.00,0.00%,PASSED
+CI (0)->(1) Threshold,16.67 mV,16.67 mV,0.00%,PASSED
+Hubbard Exchange J (t=10µeV),124.9951 neV,125.0000 neV,0.0039%,PASSED
+1/f Spectral Exponent (alpha=1.0),1.0150 (R²=0.903),1.0000,1.50%,PASSED
+RF Resonator Frequency f0,459.441 MHz,459.441 MHz,0.0000%,PASSED

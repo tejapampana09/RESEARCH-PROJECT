@@ -1,0 +1,7 @@
+{
+  "experiment": "01_harmonic",
+  "hbar_omega_meV": 0.9873179348214112,
+  "grid_points": 45,
+  "grid_size_nm": 80.0,
+  "ground_state_error_percent": 5.653508636584776
+}

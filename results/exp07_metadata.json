@@ -1,0 +1,10 @@
+{
+  "experiment": "07_noise",
+  "sample_rate_Hz": 10000.0,
+  "n_samples": 32768,
+  "pink_target_alpha": 1.0,
+  "pink_fitted_alpha": 0.9756138081964895,
+  "pink_R2": 0.8962135531649927,
+  "johnson_rms_measured_uV": 0.005205457630602521,
+  "johnson_rms_theory_uV": 0.005254805419803859
+}

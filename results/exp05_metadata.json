@@ -1,0 +1,7 @@
+{
+  "experiment": "05_rf_reflectometry",
+  "resonance_frequency_MHz": 459.4407461848267,
+  "peak_Cq_fF": 0.03824686949778751,
+  "max_phase_shift_deg": 0.0006326001886482743,
+  "IQ_loop_radius_mV": 1.1445500085826916e-11
+}

@@ -1,0 +1,8 @@
+{
+  "experiment": "06_hubbard",
+  "hilbert_space_dim": 6,
+  "U_meV": 4.0,
+  "U12_meV": 0.8,
+  "weak_t_10ueV_error_percent": 0.005931408044924133,
+  "peak_J_ueV": 27.882059609970295
+}

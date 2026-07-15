@@ -1,0 +1,9 @@
+{
+  "experiment": "03_double_dot",
+  "U_meV": 4.0,
+  "U12_meV": 0.8,
+  "tunnel_coupling_ueV": 50.0,
+  "lever_arm": 0.12,
+  "peak_exchange_J_ueV": 23.204433348762233,
+  "triple_points_count": 3
+}

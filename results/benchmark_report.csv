@@ -1,0 +1,6 @@
+Module,Execution_Time_ms,Target_FPS
+2D Schrödinger Solver (45x45),90.16226000385359,20
+Constant Interaction Evaluation,0.43750001350417733,1000
+Fermi-Hubbard Diagonalization,0.020477999933063984,500
+RF Reflectometry Circuit,0.08407900051679462,2000
+Noise Generator (8192 points),6.136199983302504,100
