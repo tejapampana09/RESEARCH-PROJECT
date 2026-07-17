@@ -45,7 +45,7 @@ app.add_middleware(
 
 # Global instances representing our active twin
 twin_engine = DigitalTwinEngine(num_dots=2)  # Default: Double Quantum Dot
-rl_agent = DQNTuningAgent(state_dim=2, action_dim=4)
+rl_agent = DQNTuningAgent(state_dim=4, action_dim=4)
 fault_detector = FaultDetector()
 noise_predictor = NoisePredictor()
 
