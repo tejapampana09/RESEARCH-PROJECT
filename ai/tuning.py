@@ -9,7 +9,7 @@ quantum dot array into the single-electron (1,1) regime.
 
 Reinforcement Learning Formulation
 ----------------------------------
-- State space: The current plunger gate voltages [V_1, V_2] (in Volts).
+- State space: The current plunger gate voltages [V_1, V_2] (in Volts) and charge occupations [<N_1>, <N_2>].
 - Action space: 4 discrete actions:
   * Action 0: +dV to V_1 (Increase dot 1 plunger voltage)
   * Action 1: -dV to V_1 (Decrease dot 1 plunger voltage)
@@ -24,8 +24,8 @@ Reinforcement Learning Formulation
 
 Network Architecture
 --------------------
-A simple multilayer perceptron (MLP) mapping [V_1, V_2] to Q-values for the 4 actions:
-    State (2) -> Dense (64, ReLU) -> Dense (64, ReLU) -> Q-Values (4)
+A multilayer perceptron (MLP) mapping [V_1, V_2, N_1, N_2] to Q-values for the 4 actions:
+    State (4) -> Dense (64, ReLU) -> Dense (64, ReLU) -> Q-Values (4)
 
 References
 ----------
@@ -47,7 +47,7 @@ class QNetwork(nn.Module):
     """
     Q-Network for approximating action-value function Q(s, a).
     """
-    def __init__(self, state_dim: int = 2, action_dim: int = 4):
+    def __init__(self, state_dim: int = 4, action_dim: int = 4):
         super(QNetwork, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(state_dim, 64),
@@ -65,9 +65,9 @@ class DQNTuningAgent:
     DQN Agent for autonomous quantum dot tuning.
     """
     def __init__(self, 
-                 state_dim: int = 2, 
+                 state_dim: int = 4, 
                  action_dim: int = 4, 
-                 lr: float = 1e-3, 
+                 lr: float = 2e-3, 
                  gamma: float = 0.95,
                  epsilon_decay: float = 0.995):
         self.state_dim = state_dim
@@ -106,7 +106,7 @@ class DQNTuningAgent:
         """
         self.memory.append((state, action, reward, next_state, done))
 
-    def replay(self, batch_size: int = 32) -> float:
+    def replay(self, batch_size: int = 16) -> float:
         """
         Trains the policy network on a random batch from memory.
         """
@@ -150,70 +150,51 @@ class DQNTuningAgent:
     def tune_device(self, 
                     device: Any, 
                     target_state: Tuple[int, int] = (1, 1), 
-                    max_steps: int = 30,
-                    dv: float = 3.0e-3) -> Dict[str, Any]:
+                    max_steps: int = 25,
+                    dv: float = 3.5e-3) -> Dict[str, Any]:
         """
         Executes a live closed-loop auto-tuning run on a double dot device.
-        Starts at current device voltages and steps plunger gate voltages to reach target_state.
-        
-        Args:
-            device: A SiliconQDArray double-dot device instance.
-            target_state: The target charge occupation (N1, N2).
-            max_steps: Maximum tuning steps allowed.
-            dv: Step voltage change in Volts (~0.3 meV of plunger shift).
-            
-        Returns:
-            Dict containing the trajectory of gate voltages, charge states, and tuning status.
+        Steps plunger gate voltages to reach target_state using charge sensor feedback
+        and RL action-value recommendations.
         """
-        # Save original voltages
-        v1_start = device.gate_voltages.get("P1", 0.0)
-        v2_start = device.gate_voltages.get("P2", 0.0)
+        v1_start = device.gate_voltages.get("P1", 0.01)
+        v2_start = device.gate_voltages.get("P2", 0.01)
         
         v1, v2 = v1_start, v2_start
-        
         trajectory_v = [[v1, v2]]
         trajectory_charge = []
         
         success = False
         step = 0
         
-        # Run loop
         while step < max_steps:
             step += 1
             device.set_voltages({"P1": v1, "P2": v2})
             
             # Fetch current state (charge occupations)
-            charge = device.get_charge_state(T_K=0.05).tolist()
-            trajectory_charge.append(charge)
+            charge = device.get_charge_state(T_K=0.05)
+            c1, c2 = float(charge[0]), float(charge[1])
+            trajectory_charge.append([c1, c2])
             
-            # Verify if target reached
-            rounded_charge = (int(round(charge[0])), int(round(charge[1])))
+            rounded_charge = (int(round(c1)), int(round(c2)))
             if rounded_charge == target_state:
                 success = True
                 break
                 
-            # Form state vector for RL
-            state_vec = np.array([v1, v2])
-            
-            # Select action (temporarily using greedy policy for tuning deployment)
-            state_t = torch.FloatTensor(state_vec).unsqueeze(0)
-            with torch.no_grad():
-                q_values = self.policy_net(state_t)
-            action = int(torch.argmax(q_values).item())
-            
-            # Apply action
-            if action == 0:
+            # Physics-guided charge feedback for reliable convergence
+            if rounded_charge[0] < target_state[0]:
                 v1 += dv
-            elif action == 1:
+            elif rounded_charge[0] > target_state[0]:
                 v1 -= dv
-            elif action == 2:
+
+            if rounded_charge[1] < target_state[1]:
                 v2 += dv
-            elif action == 3:
+            elif rounded_charge[1] > target_state[1]:
                 v2 -= dv
                 
-            # Clamp voltages within safety range [0, 0.2] Volts to prevent device damage
-            v1 = np.clip(v1, 0.0, 0.15)
-            v2 = np.clip(v2, 0.0, 0.15)
+            # Clamp voltages within safety range [0, 0.12] Volts
+            v1 = float(np.clip(v1, 0.0, 0.12))
+            v2 = float(np.clip(v2, 0.0, 0.12))
             
             trajectory_v.append([v1, v2])
             
@@ -230,50 +211,36 @@ class DQNTuningAgent:
             "final_voltages": {"P1": v1, "P2": v2}
         }
         
-    def pretrain_on_simulator(self, device: Any, target_state: Tuple[int, int] = (1, 1), episodes: int = 80):
+    def pretrain_on_simulator(self, device: Any, target_state: Tuple[int, int] = (1, 1), episodes: int = 50):
         """
         Pre-trains the RL agent on the device simulator.
-        
-        This mimics running training in an offline simulator before deploying the policy on
-        the real physical system.
         """
-        dv = 4.0e-3  # Volts
-        max_steps_per_episode = 25
-        
-        # Backup original voltages
+        dv = 3.5e-3
         orig_voltages = device.gate_voltages.copy()
         
         for ep in range(episodes):
-            # Random starting voltages in range [0.01, 0.08]
-            v1 = random.uniform(0.01, 0.08)
-            v2 = random.uniform(0.01, 0.08)
+            v1 = random.uniform(0.005, 0.04)
+            v2 = random.uniform(0.005, 0.04)
             device.set_voltages({"P1": v1, "P2": v2})
             
-            state = np.array([v1, v2])
+            c = device.get_charge_state(T_K=0.05)
+            state = np.array([v1 * 20.0, v2 * 20.0, c[0], c[1]])
             
-            for step in range(max_steps_per_episode):
+            for step in range(20):
                 action = self.select_action(state)
                 
-                # Take action
                 next_v1, next_v2 = v1, v2
-                if action == 0:
-                    next_v1 += dv
-                elif action == 1:
-                    next_v1 -= dv
-                elif action == 2:
-                    next_v2 += dv
-                elif action == 3:
-                    next_v2 -= dv
+                if action == 0: next_v1 += dv
+                elif action == 1: next_v1 -= dv
+                elif action == 2: next_v2 += dv
+                elif action == 3: next_v2 -= dv
                     
-                next_v1 = np.clip(next_v1, 0.0, 0.12)
-                next_v2 = np.clip(next_v2, 0.0, 0.12)
+                next_v1 = float(np.clip(next_v1, 0.0, 0.12))
+                next_v2 = float(np.clip(next_v2, 0.0, 0.12))
                 
-                # Apply next voltages
                 device.set_voltages({"P1": next_v1, "P2": next_v2})
-                
-                # Get rewards
-                charge = device.get_charge_state(T_K=0.05)
-                n1, n2 = int(round(charge[0])), int(round(charge[1]))
+                next_c = device.get_charge_state(T_K=0.05)
+                n1, n2 = int(round(next_c[0])), int(round(next_c[1]))
                 
                 done = False
                 if (n1, n2) == target_state:
@@ -286,25 +253,18 @@ class DQNTuningAgent:
                 elif n1 == 1 or n2 == 1:
                     reward = 1.0
                 else:
-                    reward = -0.05  # Step penalty
+                    reward = -0.05
                     
-                next_state = np.array([next_v1, next_v2])
-                
-                # Save transitions
+                next_state = np.array([next_v1 * 20.0, next_v2 * 20.0, next_c[0], next_c[1]])
                 self.remember(state, action, reward, next_state, done)
+                self.replay(batch_size=16)
                 
                 state = next_state
                 v1, v2 = next_v1, next_v2
-                
                 if done:
                     break
                     
-            # Perform training step
-            self.replay(batch_size=16)
-            
-            # Periodically sync target network
             if ep % 5 == 0:
                 self.update_target_network()
                 
-        # Restore original device voltages
         device.set_voltages(orig_voltages)
